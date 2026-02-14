@@ -1,0 +1,401 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>ValueBook Mini App</title>
+  <style>
+    :root{--bg:#0b1220;--card:#111a2e;--muted:#9fb0d0;--text:#e9f0ff;--acc:#4da3ff;--good:#3be36b;--warn:#ffb020;--bad:#ff5566;}
+    *{box-sizing:border-box;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial}
+    body{margin:0;background:linear-gradient(180deg,#070b14,#0b1220);color:var(--text)}
+    .wrap{max-width:520px;margin:0 auto;padding:16px 14px 44px}
+    .top{display:flex;align-items:center;justify-content:space-between;margin:10px 0 14px}
+    .brand{display:flex;gap:10px;align-items:center}
+    .logo{width:38px;height:38px;border-radius:12px;background:linear-gradient(135deg,var(--acc),#7c5cff);display:grid;place-items:center;font-weight:800}
+    .pill{font-size:12px;color:var(--muted);border:1px solid rgba(255,255,255,.12);padding:6px 10px;border-radius:999px}
+    .card{background:rgba(17,26,46,.92);border:1px solid rgba(255,255,255,.10);border-radius:18px;padding:14px 14px 12px;box-shadow:0 10px 30px rgba(0,0,0,.35)}
+    .h1{font-size:18px;font-weight:800;margin:0 0 6px}
+    .sub{font-size:13px;color:var(--muted);margin:0 0 12px;line-height:1.4}
+    .progress{height:9px;background:rgba(255,255,255,.08);border-radius:99px;overflow:hidden;margin:10px 0 14px}
+    .bar{height:100%;width:0;background:linear-gradient(90deg,var(--acc),#7c5cff)}
+    .row{display:flex;gap:10px}
+    .col{flex:1}
+    label{display:block;font-size:12px;color:var(--muted);margin:10px 0 6px}
+    input,select,textarea{width:100%;padding:12px;border-radius:12px;border:1px solid rgba(255,255,255,.12);background:rgba(0,0,0,.15);color:var(--text);outline:none}
+    textarea{min-height:88px;resize:vertical}
+    .btns{display:flex;gap:10px;margin-top:12px}
+    button{flex:1;padding:12px;border-radius:12px;border:0;font-weight:800;cursor:pointer}
+    .primary{background:linear-gradient(135deg,var(--acc),#7c5cff);color:#071019}
+    .ghost{background:rgba(255,255,255,.08);color:var(--text);border:1px solid rgba(255,255,255,.12)}
+    .danger{background:rgba(255,85,102,.12);color:var(--bad);border:1px solid rgba(255,85,102,.25)}
+    .tag{display:inline-flex;align-items:center;gap:8px;padding:8px 10px;border-radius:999px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.10);font-size:12px;color:var(--muted)}
+    .chips{display:flex;gap:10px;flex-wrap:wrap;margin:8px 0 2px}
+    .chip{flex:1;min-width:160px;display:flex;gap:10px;align-items:flex-start;padding:12px;border-radius:16px;border:1px solid rgba(255,255,255,.12);background:rgba(0,0,0,.10);cursor:pointer}
+    .chip strong{display:block}
+    .chip p{margin:2px 0 0;font-size:12px;color:var(--muted);line-height:1.35}
+    .chip.sel{border-color:rgba(77,163,255,.7);box-shadow:0 0 0 3px rgba(77,163,255,.15) inset}
+    .drop{border:1px dashed rgba(255,255,255,.22);border-radius:16px;padding:12px;background:rgba(0,0,0,.08)}
+    .thumbs{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+    .thumb{width:74px;height:74px;border-radius:12px;object-fit:cover;border:1px solid rgba(255,255,255,.12)}
+    .sum{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px}
+    .box{padding:12px;border-radius:16px;background:rgba(0,0,0,.10);border:1px solid rgba(255,255,255,.10)}
+    .box .k{font-size:12px;color:var(--muted)}
+    .box .v{font-size:16px;font-weight:900;margin-top:4px}
+    .small{font-size:12px;color:var(--muted);line-height:1.4}
+    .ok{color:var(--good)}
+    .warn{color:var(--warn)}
+    .link{color:var(--acc);text-decoration:none;font-weight:800}
+    .hide{display:none}
+    .footer{margin-top:14px;text-align:center;font-size:12px;color:var(--muted)}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="top">
+      <div class="brand">
+        <div class="logo">VB</div>
+        <div>
+          <div style="font-weight:900">ValueBook</div>
+          <div style="font-size:12px;color:var(--muted)">Instant Valuation Mini App</div>
+        </div>
+      </div>
+      <div class="pill" id="stepPill">Step 1/5</div>
+    </div>
+
+    <div class="card">
+      <div class="progress"><div class="bar" id="bar"></div></div>
+
+      <!-- STEP 1 -->
+      <section id="s1">
+        <h1 class="h1">Choose a valuation type</h1>
+        <p class="sub">This opens like an “app” when someone clicks your Facebook/Gumtree link.</p>
+
+        <div class="chips">
+          <div class="chip sel" data-type="instant" onclick="pickType('instant')">
+            <div class="tag">⚡</div>
+            <div>
+              <strong>Instant Estimate</strong>
+              <p>Fast estimate based on category + condition + photos. Great for quick leads.</p>
+            </div>
+          </div>
+          <div class="chip" data-type="detailed" onclick="pickType('detailed')">
+            <div class="tag">🧾</div>
+            <div>
+              <strong>Detailed Report</strong>
+              <p>More questions + research. You deliver a proper report in X hours.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="btns">
+          <button class="primary" onclick="go(2)">Continue</button>
+        </div>
+      </section>
+
+      <!-- STEP 2 -->
+      <section id="s2" class="hide">
+        <h1 class="h1">Item details</h1>
+        <p class="sub">Fill in only what you know. The estimate improves as info improves.</p>
+
+        <label>Category</label>
+        <select id="category">
+          <option>Furniture</option>
+          <option>Appliances</option>
+          <option>Art / Collectibles</option>
+          <option>Electronics</option>
+          <option>Tools</option>
+          <option>Other</option>
+        </select>
+
+        <div class="row">
+          <div class="col">
+            <label>Brand (optional)</label>
+            <input id="brand" placeholder="e.g., Samsung, Defy, Bosch"/>
+          </div>
+          <div class="col">
+            <label>Condition</label>
+            <select id="condition">
+              <option value="excellent">Excellent</option>
+              <option value="good" selected>Good</option>
+              <option value="fair">Fair</option>
+              <option value="poor">Poor / Needs work</option>
+            </select>
+          </div>
+        </div>
+
+        <label>Description</label>
+        <textarea id="desc" placeholder="Short description, model number, size, age, any issues..."></textarea>
+
+        <div class="btns">
+          <button class="ghost" onclick="go(1)">Back</button>
+          <button class="primary" onclick="go(3)">Next</button>
+        </div>
+      </section>
+
+      <!-- STEP 3 -->
+      <section id="s3" class="hide">
+        <h1 class="h1">Upload photos</h1>
+        <p class="sub">Add 2–6 clear photos. (Front, label/model, close-ups, any damage.)</p>
+
+        <div class="drop">
+          <input id="photos" type="file" accept="image/*" multiple />
+          <div class="small" style="margin-top:8px">
+            Tip: good photos = higher trust = higher conversion.
+          </div>
+          <div class="thumbs" id="thumbs"></div>
+        </div>
+
+        <div class="btns">
+          <button class="ghost" onclick="go(2)">Back</button>
+          <button class="primary" onclick="calcEstimate()">Next</button>
+        </div>
+      </section>
+
+      <!-- STEP 4 -->
+      <section id="s4" class="hide">
+        <h1 class="h1">Estimate + price</h1>
+        <p class="sub">This is the “instant valuation” moment. It still feels like an app ✅</p>
+
+        <div class="sum">
+          <div class="box">
+            <div class="k">Estimated value range</div>
+            <div class="v" id="range">—</div>
+          </div>
+          <div class="box">
+            <div class="k">Turnaround</div>
+            <div class="v" id="eta">—</div>
+          </div>
+          <div class="box">
+            <div class="k">Valuation fee</div>
+            <div class="v" id="fee">—</div>
+          </div>
+          <div class="box">
+            <div class="k">Confidence</div>
+            <div class="v" id="conf">—</div>
+          </div>
+        </div>
+
+        <p class="small" id="note" style="margin-top:10px"></p>
+
+        <label>Your email (to send results link)</label>
+        <input id="email" placeholder="name@email.com"/>
+
+        <label>Your WhatsApp (optional)</label>
+        <input id="wa" placeholder="+27..."/>
+
+        <div class="btns">
+          <button class="ghost" onclick="go(3)">Back</button>
+          <button class="primary" onclick="go(5)">Continue to payment</button>
+        </div>
+      </section>
+
+      <!-- STEP 5 -->
+      <section id="s5" class="hide">
+        <h1 class="h1">Payment</h1>
+        <p class="sub">For now this is a placeholder. When you’re ready, we connect PayFast/PayPal/Stripe.</p>
+
+        <div class="box">
+          <div class="k">Amount due</div>
+          <div class="v" id="due">—</div>
+          <div class="small" style="margin-top:8px">
+            ✅ After payment, we create a job + a results link.
+          </div>
+        </div>
+
+        <div class="btns">
+          <button class="ghost" onclick="go(4)">Back</button>
+          <button class="primary" onclick="submitJob()">Simulate Payment ✅</button>
+        </div>
+
+        <button class="danger" style="width:100%;margin-top:10px" onclick="resetAll()">Reset</button>
+      </section>
+
+      <!-- DONE -->
+      <section id="s6" class="hide">
+        <h1 class="h1">Done ✅</h1>
+        <p class="sub">Your job is created. You can share this results link with the customer.</p>
+
+        <div class="box">
+          <div class="k">Job ID</div>
+          <div class="v" id="jobId">—</div>
+          <div class="k" style="margin-top:10px">Results Link</div>
+          <div class="v" style="font-size:14px">
+            <a class="link" id="resLink" href="#" target="_blank" rel="noreferrer">Open results</a>
+          </div>
+        </div>
+
+        <div class="footer">
+          Want PayFast + real admin dashboard + automatic PDF reports? That’s the next upgrade.
+        </div>
+
+        <div class="btns">
+          <button class="primary" onclick="resetAll()">Start new valuation</button>
+        </div>
+      </section>
+    </div>
+
+    <div class="footer">© ValueBook • Mini App demo</div>
+  </div>
+
+<script>
+  // ====== CONFIG ======
+  // Put your backend URL here (Cloudflare Worker below).
+  const API_BASE = "https://YOUR-WORKER-URL.workers.dev"; // <-- change this after deploy
+
+  // ====== STATE ======
+  const state = {
+    type: "instant",
+    category: "Furniture",
+    condition: "good",
+    brand: "",
+    desc: "",
+    photos: [],
+    estimate: { low: 0, high: 0, fee: 0, confidence: 0, eta: "" }
+  };
+
+  let step = 1;
+
+  function $(id){ return document.getElementById(id); }
+  function show(id){ $(id).classList.remove("hide"); }
+  function hide(id){ $(id).classList.add("hide"); }
+
+  function setProgress(){
+    $("stepPill").textContent = `Step ${Math.min(step,5)}/5`;
+    $("bar").style.width = `${(Math.min(step,5)-1)/4*100}%`;
+  }
+
+  function go(n){
+    step = n;
+    for(let i=1;i<=6;i++) hide("s"+i);
+    show("s"+n);
+    setProgress();
+  }
+
+  function pickType(t){
+    state.type = t;
+    document.querySelectorAll(".chip").forEach(el=>el.classList.remove("sel"));
+    document.querySelector(`.chip[data-type="${t}"]`).classList.add("sel");
+  }
+
+  // Photo preview
+  $("photos").addEventListener("change", async (e)=>{
+    const files = [...e.target.files].slice(0,6);
+    state.photos = [];
+    $("thumbs").innerHTML = "";
+    for(const f of files){
+      const b64 = await fileToBase64(f);
+      state.photos.push(b64);
+      const img = document.createElement("img");
+      img.className = "thumb";
+      img.src = b64;
+      $("thumbs").appendChild(img);
+    }
+  });
+
+  function fileToBase64(file){
+    return new Promise((res,rej)=>{
+      const r = new FileReader();
+      r.onload = ()=>res(r.result);
+      r.onerror = rej;
+      r.readAsDataURL(file);
+    });
+  }
+
+  // Very simple estimate rules (you can upgrade later)
+  function calcEstimate(){
+    state.category = $("category").value;
+    state.brand = $("brand").value.trim();
+    state.condition = $("condition").value;
+    state.desc = $("desc").value.trim();
+
+    const photoCount = state.photos.length;
+    const base = ({
+      "Furniture": 800,
+      "Appliances": 1200,
+      "Art / Collectibles": 1500,
+      "Electronics": 1000,
+      "Tools": 700,
+      "Other": 600
+    })[state.category] || 600;
+
+    const condMult = ({
+      "excellent": 1.25,
+      "good": 1.00,
+      "fair": 0.80,
+      "poor": 0.55
+    })[state.condition] || 1.0;
+
+    // more photos => more confidence
+    let conf = 45 + Math.min(30, photoCount * 6);
+    if(state.brand) conf += 6;
+    if(state.desc.length > 20) conf += 8;
+    conf = Math.max(35, Math.min(95, conf));
+
+    let low = Math.round(base * condMult * 0.75);
+    let high = Math.round(base * condMult * 1.35);
+
+    // Pricing (example)
+    let fee = (state.type === "instant") ? 49 : 149; // change to your prices
+    let eta = (state.type === "instant") ? "Instant" : "6–24 hours";
+
+    // if confidence low, widen range
+    if(conf < 60){ low = Math.round(low*0.85); high = Math.round(high*1.20); }
+
+    state.estimate = { low, high, fee, confidence: conf, eta };
+
+    $("range").textContent = `R${low} – R${high}`;
+    $("eta").textContent = eta;
+    $("fee").textContent = `R${fee}`;
+    $("due").textContent = `R${fee}`;
+    $("conf").innerHTML = `${conf}% ${conf>=75?'<span class="ok">●</span>':conf>=60?'<span class="warn">●</span>':'<span class="bad">●</span>'}`;
+
+    $("note").textContent =
+      conf>=75 ? "High confidence: good photos + enough info." :
+      conf>=60 ? "Medium confidence: add clearer label/model photo for better accuracy." :
+                 "Low confidence: add more photos and details to improve accuracy.";
+
+    go(4);
+  }
+
+  async function submitJob(){
+    const email = $("email").value.trim();
+    const wa = $("wa").value.trim();
+
+    const payload = {
+      type: state.type,
+      category: state.category,
+      condition: state.condition,
+      brand: state.brand,
+      desc: state.desc,
+      photos: state.photos.slice(0,6),
+      estimate: state.estimate,
+      contact: { email, whatsapp: wa },
+      createdAt: new Date().toISOString()
+    };
+
+    try{
+      const r = await fetch(`${API_BASE}/api/create`, {
+        method:"POST",
+        headers:{ "Content-Type":"application/json" },
+        body: JSON.stringify(payload)
+      });
+      const data = await r.json();
+      if(!r.ok) throw new Error(data?.error || "Failed");
+
+      $("jobId").textContent = data.jobId;
+      $("resLink").href = `${API_BASE}/results/${data.jobId}`;
+      go(6);
+    }catch(err){
+      alert("Could not create job. Did you set API_BASE to your Worker URL?\n\n" + err.message);
+    }
+  }
+
+  function resetAll(){
+    location.reload();
+  }
+
+  // boot
+  setProgress();
+</script>
+</body>
+</html>
