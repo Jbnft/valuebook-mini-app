@@ -48,7 +48,7 @@
     .hide{display:none}
     .footer{margin-top:14px;text-align:center;font-size:12px;color:var(--muted)}
 
-    /* ===== NEW: blur + lock ===== */
+    /* blur + lock */
     .blur{filter:blur(6px);opacity:.85;user-select:none;pointer-events:none}
     .lock{opacity:.9;font-weight:800}
   </style>
@@ -309,7 +309,7 @@
     });
   }
 
-  // Very simple estimate rules (you can upgrade later)
+  // ===== ESTIMATE + CONFIDENCE =====
   function calcEstimate(){
     state.category = $("category").value;
     state.brand = $("brand").value.trim();
@@ -317,6 +317,7 @@
     state.desc = $("desc").value.trim();
 
     const photoCount = state.photos.length;
+
     const base = ({
       "Furniture": 800,
       "Appliances": 1200,
@@ -333,51 +334,69 @@
       "poor": 0.55
     })[state.condition] || 1.0;
 
-    // more photos => more confidence
-let conf = 45 + Math.min(30, photoCount * 6);
-if(state.brand) conf += 6;
-if(state.desc.length > 20) conf += 8;
-
-// Base clamp (safety)
-conf = Math.max(35, Math.min(95, conf));
-
-// ===== Confidence ranges by valuation type =====
-// ⚡ Instant: 55% – 80% (even with great photos)
-if (state.type === "instant") {
-  conf = Math.max(55, Math.min(80, conf));
-}
-
-// 🧾 Detailed: 75% – 95% (more research/time)
-if (state.type === "detailed") {
-  conf = Math.max(75, Math.min(95, conf));
-}
-
-
+    // Range
     let low = Math.round(base * condMult * 0.75);
     let high = Math.round(base * condMult * 1.35);
 
-    // Pricing (example)
-    let fee = (state.type === "instant") ? 49 : 149; // change to your prices
-    let eta = (state.type === "instant") ? "Instant" : "6–24 hours";
+    // Pricing + ETA
+    const fee = (state.type === "instant") ? 49 : 149; // change to your prices
+    const eta = (state.type === "instant") ? "Instant" : "6–24 hours";
 
-    // if confidence low, widen range
-    if(conf < 60){ low = Math.round(low*0.85); high = Math.round(high*1.20); }
+    // ===== Option B: type-based confidence mapping =====
+    // Build a "quality" score 0..1 from info completeness:
+    const photoScore = Math.min(1, photoCount / 6);          // 0..1
+    const brandScore = state.brand ? 0.15 : 0;               // +0.15
+    const descScore  = state.desc.length > 20 ? 0.20 : 0;    // +0.20
+
+    let quality = 0.35 + (photoScore * 0.45) + brandScore + descScore; // ~0.35..1.0
+    quality = Math.max(0, Math.min(1, quality));
+
+    // Confidence ranges by type:
+    let minC, maxC;
+    if (state.type === "instant") {
+      minC = 55; maxC = 80;   // ⚡ Instant: 55–80
+    } else {
+      minC = 75; maxC = 95;   // 🧾 Detailed: 75–95
+    }
+
+    let conf = Math.round(minC + quality * (maxC - minC));
+    conf = Math.max(minC, Math.min(maxC, conf));
+
+    // If confidence low, widen range
+    if(conf < 60){
+      low = Math.round(low*0.85);
+      high = Math.round(high*1.20);
+    }
 
     state.estimate = { low, high, fee, confidence: conf, eta };
 
-    // ===== NEW: split + blur the high side =====
+    // Split + blur high side
     $("rangeLow").textContent = `R${low}`;
     $("rangeHighBlur").textContent = `R${high}`;
 
     $("eta").textContent = eta;
     $("fee").textContent = `R${fee}`;
     $("due").textContent = `R${fee}`;
-    $("conf").innerHTML = `${conf}% ${conf>=75?'<span class="ok">●</span>':conf>=60?'<span class="warn">●</span>':'<span class="bad">●</span>'}`;
 
-    $("note").textContent =
-      conf>=75 ? "High confidence: good photos + enough info." :
-      conf>=60 ? "Medium confidence: add clearer label/model photo for better accuracy." :
-                 "Low confidence: add more photos and details to improve accuracy.";
+    $("conf").innerHTML =
+      `${conf}% ` +
+      (conf>=85?'<span class="ok">●</span>':
+       conf>=75?'<span class="ok">●</span>':
+       conf>=60?'<span class="warn">●</span>':
+               '<span class="bad">●</span>');
+
+    // Notes aligned to type
+    if(state.type === "instant"){
+      $("note").textContent =
+        conf>=75 ? "Instant estimate: strong inputs, but still fast/automated." :
+        conf>=65 ? "Instant estimate: add clearer label/model photo for higher trust." :
+                   "Instant estimate: add more photos + details to improve accuracy.";
+    } else {
+      $("note").textContent =
+        conf>=90 ? "Detailed report: premium confidence with research + manual review." :
+        conf>=82 ? "Detailed report: good confidence—manual review will refine further." :
+                   "Detailed report: add more info/photos for a stronger final report.";
+    }
 
     go(4);
   }
@@ -404,16 +423,14 @@ if (state.type === "detailed") {
         headers:{ "Content-Type":"application/json" },
         body: JSON.stringify(payload)
       });
-      const data = await r.json();
 
-      // ===== NEW: better error handling (your requested line) =====
+      const data = await r.json();
       if(!r.ok) throw new Error(data?.error || "Failed");
 
-      // ===== NEW: set jobId (your requested line) =====
       $("jobId").textContent = data.jobId;
-
       $("resLink").href = `${API_BASE}/results/${data.jobId}`;
       go(6);
+
     }catch(err){
       alert("Could not create job. Did you set API_BASE to your Worker URL?\n\n" + err.message);
     }
@@ -428,4 +445,3 @@ if (state.type === "detailed") {
 </script>
 </body>
 </html>
-
