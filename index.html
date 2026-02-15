@@ -47,6 +47,10 @@
     .link{color:var(--acc);text-decoration:none;font-weight:800}
     .hide{display:none}
     .footer{margin-top:14px;text-align:center;font-size:12px;color:var(--muted)}
+
+    /* ===== NEW: blur + lock ===== */
+    .blur{filter:blur(6px);opacity:.85;user-select:none;pointer-events:none}
+    .lock{opacity:.9;font-weight:800}
   </style>
 </head>
 <body>
@@ -159,7 +163,12 @@
         <div class="sum">
           <div class="box">
             <div class="k">Estimated value range</div>
-            <div class="v" id="range">—</div>
+            <div class="v">
+              <span id="rangeLow">—</span>
+              <span class="lock"> – </span>
+              <span id="rangeHighBlur" class="blur">—</span>
+              <span class="lock"> 🔒</span>
+            </div>
           </div>
           <div class="box">
             <div class="k">Turnaround</div>
@@ -215,29 +224,9 @@
         <h1 class="h1">Done ✅</h1>
         <p class="sub">Your job is created. You can share this results link with the customer.</p>
 
-        <!-- UPDATED RECEIPT-STYLE BOX (ALL CHANGES INCLUDED) -->
         <div class="box">
           <div class="k">Job ID</div>
           <div class="v" id="jobId">—</div>
-
-          <div class="k" style="margin-top:10px">Item</div>
-          <div class="v" id="finalItem">—</div>
-
-          <div class="k" style="margin-top:10px">Type</div>
-          <div class="v" id="finalType">—</div>
-
-          <div class="k" style="margin-top:10px">Turnaround</div>
-          <div class="v" id="finalEta">—</div>
-
-          <div class="k" style="margin-top:10px">Valuation fee</div>
-          <div class="v" id="finalFee">—</div>
-
-          <div class="k" style="margin-top:10px">Final Estimated Range</div>
-          <div class="v" id="finalRange">—</div>
-
-          <div class="k" style="margin-top:10px">Confidence</div>
-          <div class="v" id="finalConf">—</div>
-
           <div class="k" style="margin-top:10px">Results Link</div>
           <div class="v" style="font-size:14px">
             <a class="link" id="resLink" href="#" target="_blank" rel="noreferrer">Open results</a>
@@ -259,7 +248,6 @@
 
 <script>
   // ====== CONFIG ======
-  // Put your backend URL here (Cloudflare Worker below).
   const API_BASE = "https://YOUR-WORKER-URL.workers.dev"; // <-- change this after deploy
 
   // ====== STATE ======
@@ -363,7 +351,10 @@
 
     state.estimate = { low, high, fee, confidence: conf, eta };
 
-    $("range").textContent = `R${low} – R${high}`;
+    // ===== NEW: split + blur the high side =====
+    $("rangeLow").textContent = `R${low}`;
+    $("rangeHighBlur").textContent = `R${high}`;
+
     $("eta").textContent = eta;
     $("fee").textContent = `R${fee}`;
     $("due").textContent = `R${fee}`;
@@ -400,22 +391,12 @@
         body: JSON.stringify(payload)
       });
       const data = await r.json();
+
+      // ===== NEW: better error handling (your requested line) =====
       if(!r.ok) throw new Error(data?.error || "Failed");
 
-      // REQUIRED CHANGE (jobId)
+      // ===== NEW: set jobId (your requested line) =====
       $("jobId").textContent = data.jobId;
-
-      // REQUIRED CHANGE (rangeHighBlur) - safe if element doesn't exist
-      if ($("rangeHighBlur")) $("rangeHighBlur").textContent = `R${state.estimate.high}`;
-
-      // Receipt fields
-      const niceCond = state.condition.charAt(0).toUpperCase() + state.condition.slice(1);
-      $("finalItem").textContent = `${state.category} • ${niceCond}${state.brand ? " • " + state.brand : ""}`;
-      $("finalType").textContent = (state.type === "instant") ? "Instant Estimate" : "Detailed Report";
-      $("finalEta").textContent  = state.estimate.eta;
-      $("finalFee").textContent  = `R${state.estimate.fee}`;
-      $("finalRange").textContent = `R${state.estimate.low} – R${state.estimate.high}`;
-      $("finalConf").textContent  = `${state.estimate.confidence}%`;
 
       $("resLink").href = `${API_BASE}/results/${data.jobId}`;
       go(6);
