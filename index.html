@@ -334,10 +334,24 @@
     })[state.condition] || 1.0;
 
     // more photos => more confidence
-    let conf = 45 + Math.min(30, photoCount * 6);
-    if(state.brand) conf += 6;
-    if(state.desc.length > 20) conf += 8;
-    conf = Math.max(35, Math.min(95, conf));
+let conf = 45 + Math.min(30, photoCount * 6);
+if(state.brand) conf += 6;
+if(state.desc.length > 20) conf += 8;
+
+// Base clamp (safety)
+conf = Math.max(35, Math.min(95, conf));
+
+// ===== Confidence ranges by valuation type =====
+// ⚡ Instant: 55% – 80% (even with great photos)
+if (state.type === "instant") {
+  conf = Math.max(55, Math.min(80, conf));
+}
+
+// 🧾 Detailed: 75% – 95% (more research/time)
+if (state.type === "detailed") {
+  conf = Math.max(75, Math.min(95, conf));
+}
+
 
     let low = Math.round(base * condMult * 0.75);
     let high = Math.round(base * condMult * 1.35);
@@ -414,3 +428,4 @@
 </script>
 </body>
 </html>
+
