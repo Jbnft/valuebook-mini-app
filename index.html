@@ -247,9 +247,6 @@
   </div>
 
 <script>
-  // ====== CONFIG ======
-  const API_BASE = "https://YOUR-WORKER-URL.workers.dev"; // <-- change this after deploy
-
   // ====== STATE ======
   const state = {
     type: "instant",
@@ -285,7 +282,7 @@
     document.querySelector(`.chip[data-type="${t}"]`).classList.add("sel");
   }
 
-  // Photo preview
+  // ====== Photo preview ======
   $("photos").addEventListener("change", async (e)=>{
     const files = [...e.target.files].slice(0,6);
     state.photos = [];
@@ -309,7 +306,7 @@
     });
   }
 
-  // ===== ESTIMATE + CONFIDENCE =====
+  // ====== Estimation ======
   function calcEstimate(){
     state.category = $("category").value;
     state.brand = $("brand").value.trim();
@@ -317,7 +314,6 @@
     state.desc = $("desc").value.trim();
 
     const photoCount = state.photos.length;
-
     const base = ({
       "Furniture": 800,
       "Appliances": 1200,
@@ -334,114 +330,165 @@
       "poor": 0.55
     })[state.condition] || 1.0;
 
-    // Range
-    let low = Math.round(base * condMult * 0.75);
+    // more photos => more confidence
+    let conf = 45 + Math.min(30, photoCount * 6);
+    if(state.brand) conf += 6;
+    if(state.desc.length > 20) conf += 8;
+
+    // Base clamp
+    conf = Math.max(35, Math.min(95, conf));
+
+    // ===== Confidence ranges by valuation type =====
+    // ⚡ Instant: 55% – 80%
+    if (state.type === "instant") conf = Math.max(55, Math.min(80, conf));
+    // 🧾 Detailed: 75% – 95%
+    if (state.type === "detailed") conf = Math.max(75, Math.min(95, conf));
+
+    let low  = Math.round(base * condMult * 0.75);
     let high = Math.round(base * condMult * 1.35);
 
-    // Pricing + ETA
-    const fee = (state.type === "instant") ? 49 : 149; // change to your prices
-    const eta = (state.type === "instant") ? "Instant" : "6–24 hours";
+    // Pricing
+    let fee = (state.type === "instant") ? 49 : 149;
+    let eta = (state.type === "instant") ? "Instant" : "6–24 hours";
 
-    // ===== Option B: type-based confidence mapping =====
-    // Build a "quality" score 0..1 from info completeness:
-    const photoScore = Math.min(1, photoCount / 6);          // 0..1
-    const brandScore = state.brand ? 0.15 : 0;               // +0.15
-    const descScore  = state.desc.length > 20 ? 0.20 : 0;    // +0.20
-
-    let quality = 0.35 + (photoScore * 0.45) + brandScore + descScore; // ~0.35..1.0
-    quality = Math.max(0, Math.min(1, quality));
-
-    // Confidence ranges by type:
-    let minC, maxC;
-    if (state.type === "instant") {
-      minC = 55; maxC = 80;   // ⚡ Instant: 55–80
-    } else {
-      minC = 75; maxC = 95;   // 🧾 Detailed: 75–95
-    }
-
-    let conf = Math.round(minC + quality * (maxC - minC));
-    conf = Math.max(minC, Math.min(maxC, conf));
-
-    // If confidence low, widen range
-    if(conf < 60){
-      low = Math.round(low*0.85);
-      high = Math.round(high*1.20);
-    }
+    // if confidence low, widen range
+    if(conf < 60){ low = Math.round(low*0.85); high = Math.round(high*1.20); }
 
     state.estimate = { low, high, fee, confidence: conf, eta };
 
-    // Split + blur high side
+    // ===== split + blur the high side =====
     $("rangeLow").textContent = `R${low}`;
     $("rangeHighBlur").textContent = `R${high}`;
+    $("rangeHighBlur").classList.add("blur"); // keep blurred in step 4
 
     $("eta").textContent = eta;
     $("fee").textContent = `R${fee}`;
     $("due").textContent = `R${fee}`;
 
-    $("conf").innerHTML =
-      `${conf}% ` +
-      (conf>=85?'<span class="ok">●</span>':
-       conf>=75?'<span class="ok">●</span>':
-       conf>=60?'<span class="warn">●</span>':
-               '<span class="bad">●</span>');
+    // Dot color logic: use different thresholds by type (so instant doesn’t always look “green”)
+    const greenAt = (state.type === "instant") ? 75 : 85;
+    const warnAt  = (state.type === "instant") ? 65 : 75;
 
-    // Notes aligned to type
+    $("conf").innerHTML =
+      `${conf}% ${
+        conf>=greenAt ? '<span class="ok">●</span>' :
+        conf>=warnAt  ? '<span class="warn">●</span>' :
+                        '<span class="bad">●</span>'
+      }`;
+
+    // Note by type
     if(state.type === "instant"){
       $("note").textContent =
-        conf>=75 ? "Instant estimate: strong inputs, but still fast/automated." :
-        conf>=65 ? "Instant estimate: add clearer label/model photo for higher trust." :
-                   "Instant estimate: add more photos + details to improve accuracy.";
+        "⚡ Instant Estimate: fast + automated. For maximum accuracy, upgrade to Detailed Report.";
     } else {
       $("note").textContent =
-        conf>=90 ? "Detailed report: premium confidence with research + manual review." :
-        conf>=82 ? "Detailed report: good confidence—manual review will refine further." :
-                   "Detailed report: add more info/photos for a stronger final report.";
+        "🧾 Detailed Report: manual review + research. Higher confidence and more precise range.";
     }
 
     go(4);
   }
 
-  async function submitJob(){
+  // ====== DEMO “PAYMENT” (NO BACKEND) ======
+  function submitJob(){
+    // basic contact capture
     const email = $("email").value.trim();
     const wa = $("wa").value.trim();
 
+    // generate a simple job id
+    const jobId = "VB-" + Math.random().toString(16).slice(2,8).toUpperCase() + "-" + Date.now().toString().slice(-5);
+
     const payload = {
+      jobId,
       type: state.type,
       category: state.category,
       condition: state.condition,
       brand: state.brand,
       desc: state.desc,
-      photos: state.photos.slice(0,6),
+      photosCount: state.photos.length,
       estimate: state.estimate,
       contact: { email, whatsapp: wa },
       createdAt: new Date().toISOString()
     };
 
-    try{
-      const r = await fetch(`${API_BASE}/api/create`, {
-        method:"POST",
-        headers:{ "Content-Type":"application/json" },
-        body: JSON.stringify(payload)
-      });
+    // save locally so results can load
+    localStorage.setItem("valuebook_last_job", JSON.stringify(payload));
+    localStorage.setItem("valuebook_job_"+jobId, JSON.stringify(payload));
 
-      const data = await r.json();
-      if(!r.ok) throw new Error(data?.error || "Failed");
+    // show step 6 + make link open results in-page
+    $("jobId").textContent = jobId;
+    $("resLink").href = "#results-" + jobId;
+    $("resLink").onclick = (e)=>{ e.preventDefault(); openResults(jobId); };
 
-      $("jobId").textContent = data.jobId;
-      $("resLink").href = `${API_BASE}/results/${data.jobId}`;
-      go(6);
+    // UNLOCK the high range after “payment”
+    $("rangeHighBlur").classList.remove("blur");
 
-    }catch(err){
-      alert("Could not create job. Did you set API_BASE to your Worker URL?\n\n" + err.message);
-    }
+    go(6);
   }
 
-  function resetAll(){
-    location.reload();
+  // ====== RESULTS RENDER (IN PAGE) ======
+  function openResults(jobId){
+    const raw = localStorage.getItem("valuebook_job_"+jobId) || localStorage.getItem("valuebook_last_job");
+    if(!raw){ alert("No saved job found."); return; }
+    const job = JSON.parse(raw);
+
+    // simple results popup (mini-app feel)
+    const html = `
+      <div style="position:fixed;inset:0;background:rgba(0,0,0,.55);display:grid;place-items:center;padding:16px;z-index:9999">
+        <div style="max-width:520px;width:100%;background:rgba(17,26,46,.96);border:1px solid rgba(255,255,255,.12);
+                    border-radius:18px;padding:14px;box-shadow:0 20px 60px rgba(0,0,0,.55)">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+            <div style="font-weight:900">Results ✅</div>
+            <button id="vbClose" style="background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12);
+              color:#e9f0ff;border-radius:12px;padding:8px 10px;font-weight:800;cursor:pointer">Close</button>
+          </div>
+
+          <div class="box" style="margin-bottom:10px">
+            <div class="k">Job ID</div>
+            <div class="v">${job.jobId}</div>
+            <div class="k" style="margin-top:10px">Type</div>
+            <div class="v" style="font-size:14px">${job.type==="instant" ? "⚡ Instant Estimate" : "🧾 Detailed Report"}</div>
+          </div>
+
+          <div class="sum">
+            <div class="box">
+              <div class="k">Estimated Range</div>
+              <div class="v">R${job.estimate.low} – R${job.estimate.high}</div>
+            </div>
+            <div class="box">
+              <div class="k">Confidence</div>
+              <div class="v">${job.estimate.confidence}%</div>
+            </div>
+            <div class="box">
+              <div class="k">Fee Paid</div>
+              <div class="v">R${job.estimate.fee}</div>
+            </div>
+            <div class="box">
+              <div class="k">Turnaround</div>
+              <div class="v">${job.estimate.eta}</div>
+            </div>
+          </div>
+
+          <div class="small" style="margin-top:10px;color:rgba(255,255,255,.75)">
+            Category: <b>${job.category}</b> • Condition: <b>${job.condition}</b> ${job.brand?`• Brand: <b>${job.brand}</b>`:""}
+            <br/>Photos received: <b>${job.photosCount}</b>
+          </div>
+        </div>
+      </div>
+    `;
+
+    const wrap = document.createElement("div");
+    wrap.innerHTML = html;
+    document.body.appendChild(wrap);
+
+    wrap.querySelector("#vbClose").onclick = ()=>wrap.remove();
   }
+
+  function resetAll(){ location.reload(); }
 
   // boot
   setProgress();
 </script>
+
 </body>
 </html>
+
