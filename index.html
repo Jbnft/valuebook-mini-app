@@ -47,8 +47,6 @@
     .link{color:var(--acc);text-decoration:none;font-weight:800}
     .hide{display:none}
     .footer{margin-top:14px;text-align:center;font-size:12px;color:var(--muted)}
-
-    /* blur + lock */
     .blur{filter:blur(6px);opacity:.85;user-select:none;pointer-events:none}
     .lock{opacity:.9;font-weight:800}
   </style>
@@ -143,9 +141,7 @@
 
         <div class="drop">
           <input id="photos" type="file" accept="image/*" multiple />
-          <div class="small" style="margin-top:8px">
-            Tip: good photos = higher trust = higher conversion.
-          </div>
+          <div class="small" style="margin-top:8px">Tip: good photos = higher trust = higher conversion.</div>
           <div class="thumbs" id="thumbs"></div>
         </div>
 
@@ -206,14 +202,12 @@
         <div class="box">
           <div class="k">Amount due</div>
           <div class="v" id="due">—</div>
-          <div class="small" style="margin-top:8px">
-            ✅ After payment, we create a job + a results link.
-          </div>
+          <div class="small" style="margin-top:8px">✅ After payment, we create a job + a results link.</div>
         </div>
 
         <div class="btns">
           <button class="ghost" onclick="go(4)">Back</button>
-          <button class="primary" onclick="submitJob()">Simulate Payment ✅</button>
+          <button class="primary" id="payBtn" onclick="submitJob()">Simulate Payment ✅</button>
         </div>
 
         <button class="danger" style="width:100%;margin-top:10px" onclick="resetAll()">Reset</button>
@@ -247,7 +241,7 @@
   </div>
 
 <script>
-  // ====== CONFIG (ADDED) ======
+  // ====== CONFIG ======
   const API_BASE = "https://valuebook-worker.valuebookapp.workers.dev";
 
   // ====== STATE ======
@@ -341,10 +335,8 @@
     // Base clamp
     conf = Math.max(35, Math.min(95, conf));
 
-    // ===== Confidence ranges by valuation type =====
-    // ⚡ Instant: 55% – 80%
+    // Confidence ranges
     if (state.type === "instant") conf = Math.max(55, Math.min(80, conf));
-    // 🧾 Detailed: 75% – 95%
     if (state.type === "detailed") conf = Math.max(75, Math.min(95, conf));
 
     let low  = Math.round(base * condMult * 0.75);
@@ -354,21 +346,19 @@
     let fee = (state.type === "instant") ? 49 : 149;
     let eta = (state.type === "instant") ? "Instant" : "6–24 hours";
 
-    // if confidence low, widen range
     if(conf < 60){ low = Math.round(low*0.85); high = Math.round(high*1.20); }
 
     state.estimate = { low, high, fee, confidence: conf, eta };
 
-    // ===== split + blur the high side =====
+    // Blur high side until payment
     $("rangeLow").textContent = `R${low}`;
     $("rangeHighBlur").textContent = `R${high}`;
-    $("rangeHighBlur").classList.add("blur"); // keep blurred in step 4
+    $("rangeHighBlur").classList.add("blur");
 
     $("eta").textContent = eta;
     $("fee").textContent = `R${fee}`;
     $("due").textContent = `R${fee}`;
 
-    // Dot color logic: use different thresholds by type (so instant doesn’t always look “green”)
     const greenAt = (state.type === "instant") ? 75 : 85;
     const warnAt  = (state.type === "instant") ? 65 : 75;
 
@@ -379,118 +369,61 @@
                         '<span class="bad">●</span>'
       }`;
 
-    // Note by type
-    if(state.type === "instant"){
-      $("note").textContent =
-        "⚡ Instant Estimate: fast + automated. For maximum accuracy, upgrade to Detailed Report.";
-    } else {
-      $("note").textContent =
-        "🧾 Detailed Report: manual review + research. Higher confidence and more precise range.";
-    }
+    $("note").textContent =
+      state.type === "instant"
+        ? "⚡ Instant Estimate: fast + automated. For maximum accuracy, upgrade to Detailed Report."
+        : "🧾 Detailed Report: manual review + research. Higher confidence and more precise range.";
 
     go(4);
   }
 
-  // ====== DEMO “PAYMENT” (NO BACKEND) ======
-  function submitJob(){
-    // basic contact capture
+  // ====== PAYMENT -> CREATE JOB IN KV (REAL) ======
+  async function submitJob(){
+    const btn = $("payBtn");
+    btn.disabled = true;
+    btn.textContent = "Processing…";
+
     const email = $("email").value.trim();
     const wa = $("wa").value.trim();
 
-    // generate a simple job id
-    const jobId = "VB-" + Math.random().toString(16).slice(2,8).toUpperCase() + "-" + Date.now().toString().slice(-5);
-
     const payload = {
-      jobId,
       type: state.type,
       category: state.category,
       condition: state.condition,
       brand: state.brand,
       desc: state.desc,
-      photosCount: state.photos.length,
+      photos: state.photos.slice(0,6), // for now we store base64 (later: upload to R2)
       estimate: state.estimate,
       contact: { email, whatsapp: wa },
+      paid: true,
       createdAt: new Date().toISOString()
     };
 
-    // save locally so results can load
-    localStorage.setItem("valuebook_last_job", JSON.stringify(payload));
-    localStorage.setItem("valuebook_job_"+jobId, JSON.stringify(payload));
+    try{
+      const r = await fetch(`${API_BASE}/api/create`, {
+        method:"POST",
+        headers:{ "Content-Type":"application/json" },
+        body: JSON.stringify(payload)
+      });
+      const data = await r.json();
+      if(!r.ok) throw new Error(data?.error || "Failed");
 
-    // show step 6 + make link open results in-page
-    $("jobId").textContent = jobId;
-    $("resLink").href = "#results-" + jobId;
-    $("resLink").onclick = (e)=>{ e.preventDefault(); openResults(jobId); };
+      // Unlock after "payment" success
+      $("rangeHighBlur").classList.remove("blur");
 
-    // UNLOCK the high range after “payment”
-    $("rangeHighBlur").classList.remove("blur");
-
-    go(6);
-  }
-
-  // ====== RESULTS RENDER (IN PAGE) ======
-  function openResults(jobId){
-    const raw = localStorage.getItem("valuebook_job_"+jobId) || localStorage.getItem("valuebook_last_job");
-    if(!raw){ alert("No saved job found."); return; }
-    const job = JSON.parse(raw);
-
-    const html = `
-      <div style="position:fixed;inset:0;background:rgba(0,0,0,.55);display:grid;place-items:center;padding:16px;z-index:9999">
-        <div style="max-width:520px;width:100%;background:rgba(17,26,46,.96);border:1px solid rgba(255,255,255,.12);
-                    border-radius:18px;padding:14px;box-shadow:0 20px 60px rgba(0,0,0,.55)">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
-            <div style="font-weight:900">Results ✅</div>
-            <button id="vbClose" style="background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12);
-              color:#e9f0ff;border-radius:12px;padding:8px 10px;font-weight:800;cursor:pointer">Close</button>
-          </div>
-
-          <div class="box" style="margin-bottom:10px">
-            <div class="k">Job ID</div>
-            <div class="v">${job.jobId}</div>
-            <div class="k" style="margin-top:10px">Type</div>
-            <div class="v" style="font-size:14px">${job.type==="instant" ? "⚡ Instant Estimate" : "🧾 Detailed Report"}</div>
-          </div>
-
-          <div class="sum">
-            <div class="box">
-              <div class="k">Estimated Range</div>
-              <div class="v">R${job.estimate.low} – R${job.estimate.high}</div>
-            </div>
-            <div class="box">
-              <div class="k">Confidence</div>
-              <div class="v">${job.estimate.confidence}%</div>
-            </div>
-            <div class="box">
-              <div class="k">Fee Paid</div>
-              <div class="v">R${job.estimate.fee}</div>
-            </div>
-            <div class="box">
-              <div class="k">Turnaround</div>
-              <div class="v">${job.estimate.eta}</div>
-            </div>
-          </div>
-
-          <div class="small" style="margin-top:10px;color:rgba(255,255,255,.75)">
-            Category: <b>${job.category}</b> • Condition: <b>${job.condition}</b> ${job.brand?`• Brand: <b>${job.brand}</b>`:""}
-            <br/>Photos received: <b>${job.photosCount}</b>
-          </div>
-        </div>
-      </div>
-    `;
-
-    const wrap = document.createElement("div");
-    wrap.innerHTML = html;
-    document.body.appendChild(wrap);
-
-    wrap.querySelector("#vbClose").onclick = ()=>wrap.remove();
+      $("jobId").textContent = data.jobId;
+      $("resLink").href = `${API_BASE}/results/${data.jobId}`;
+      go(6);
+    }catch(err){
+      alert("Could not create job.\n\n" + err.message);
+      btn.disabled = false;
+      btn.textContent = "Simulate Payment ✅";
+    }
   }
 
   function resetAll(){ location.reload(); }
 
-  // boot
   setProgress();
 </script>
-
 </body>
 </html>
-
